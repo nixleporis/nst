@@ -1,0 +1,368 @@
+;; This document describes the syntax of NST using the ABNF format (defined in
+;; RFC 5234 -- https://www.ietf.org/rfc/rfc5234.txt).
+;;
+;; All valid NST documents will match this description, but some valid documents
+;; will need to be rejected according to the semantics described in Supporting
+;; Text Descriptions.
+
+;; Overall Structure
+
+nst                         =   expression *( newline expression )
+
+expression                  =   whitespace [ comment ]
+expression                  =/  whitespace named-tag whitespace [ comment ]
+expression                  =/  whitespace table whitespace [ comment ]
+
+;; Newline
+
+newline                             =   %x0A                                                                        ; LF (line feed)
+newline                     =/  %x0D.0A                                                                     ; CRLF (carriage return & line feed)
+
+;; Whitespace
+
+whitespace                  =   *whitespace-char
+
+whitespace-char             =   %x20                                                                        ; Space
+whitespace-char             =/  %x09                                                                        ; Horizontal tab
+
+;; Comment
+
+comment                     =   comment-start-symbol *non-end-of-line                                       ; #...
+
+comment-start-symbol        =   %x23                                                                        ; # Hash
+non-end-of-line             =   %x09 / %x20-7F / non-ascii
+
+non-ascii                   =   %x80-D7FF / %xE000-10FFFF
+
+;; Named Tag
+
+named-tag                   =   tag-name named-tag-separator tag                                            ; name: ...
+
+tag-name                    =   simple-tag-name / dotted-tag-name                                           ; name / "name" / name."name"
+named-tag-separator         =   whitespace %x3A whitespace                                                  ; : Colon
+tag                         =   string / primitive / array / inline-table / date-time                       ; Step-by-step break down spec
+
+simple-tag-name             =   quoted-tag-name / unquoted-tag-name
+dotted-tag-name             =   simple-tag-name 1*( dot-separator simple-tag-name )
+
+quoted-tag-name             =   basic-string / literal-string
+unquoted-tag-name           =   1*( ALPHA / DIGIT / %x2D / %x5F )                                           ; A-Z / a-z / 0-9 / - / _
+dot-separator               =   whitespace %x2E whitespace                                                  ; . Period
+
+;; String
+
+string                      =   basic-string / multiline-basic-string / literal-string / multiline-literal-string
+
+;; Basic String
+
+basic-string                =   quotation-mark *basic-string-char quotation-mark                            ; "..."
+
+quotation-mark              =   %x22                                                                        ; " Quotation mark
+basic-string-char           =   basic-string-unescaped / escaped
+
+basic-string-unescaped      =   whitespace-char / %x21 / %x23-5B / %x5D-7E / non-ascii
+escaped                     =   escape escape-sequence-char
+
+escape                      =   %x5C                                                                        ; \ Backslash
+escape-sequence-char        =   %x22                                                                        ; " Quotation mark  U+0022
+escape-sequence-char        =/  %x5C                                                                        ; \ Backslash       U+005C
+escape-sequence-char        =/  %x62                                                                        ; b Backspace       U+0008
+escape-sequence-char        =/  %x66                                                                        ; f Form feed       U+000C
+escape-sequence-char        =/  %x6E                                                                        ; n Line feed       U+000A
+escape-sequence-char        =/  %x72                                                                        ; r Carriage return U+000D
+escape-sequence-char        =/  %x74                                                                        ; t Horizontal tab  U+000B
+escape-sequence-char        =/  %x75 4HEXDIG                                                                ; uXXXX             U+XXXX
+escape-sequence-char        =/  %x55 8HEXDIG                                                                ; UXXXXXXXX         U+XXXXXXXX
+
+;; Multiline Basic String
+
+multiline-basic-string      =   mbs-delimiter [ newline ] mbs-body mbs-delimiter                            ; """..."""
+
+mbs-delimiter               =   3quotation-mark                                                             ; """ Three quotation marks
+mbs-body                    =   *mbs-content *( mbs-quotes 1*mbs-content ) [ mbs-quotes ]
+
+mbs-content                 =   mbs-char / newline / mbs-escaped-newline
+mbs-quotes                  =   1*2quotation-mark                                                           ; " / "" One or two quotation marks
+
+mbs-char                    =   mbs-unescaped / escaped
+mbs-escaped-newline         =   escape whitespace newline *( whitespace-char / newline )
+
+mbs-unescaped               =   whitespace-char / %x21 / %x23-5B / %x5D-7E / non-ascii
+
+;; Literal String
+
+literal-string              =   apostrophe *literal-string-char apostrophe                                  ; '...'
+
+apostrophe                  =   %x27                                                                        ; ' Apostrophe
+literal-string-char         =   %x09 / %x20-26 / %x28-7E / non-ascii
+
+;; Multiline Literal String
+
+multiline-literal-string    =   mls-delimiter [ newline ] mls-body mls-delimiter                            ; '''...'''
+
+mls-delimiter               =   3apostrophe                                                                 ; ''' Three apostrophes
+mls-body                    =   *mls-content *( mls-quotes 1*mls-content ) [ mls-quotes ]
+
+mls-content                 =   mls-char / newline
+mls-quotes                  =   1*2apostrophe                                                               ; ' / '' One or two apostrophes
+
+mls-char                    =   %x09 / %x20-26 / %x28-7E / non-ascii
+
+;; Primitive
+
+primitive                   =   bool / char / byte / short / int / long / float / double
+
+;; Shared primitive terms, defined here for this spec
+
+minus                       =   %x2D                                                                        ; - Minus
+plus                        =   %x2B                                                                        ; + Plus
+underscore                  =   %x5F                                                                        ; _ Underscore
+
+digit1-9                    =   %x31-39                                                                     ; 1-9 Non-zero
+digit0-7                    =   %x30-37                                                                     ; 0-7 Ooctal
+digit0-1                    =   %x30-31                                                                     ; 0-1 Binary
+
+binary-prefix               =   %x30.62                                                                     ; 0b Binary prefix
+octal-prefix                =   %x30.6F                                                                     ; 0o Octal prefix
+hexadecimal-prefix          =   %x30.78                                                                     ; 0x Hexadecimal prefix
+
+;; Bool
+
+bool                        =   true / false
+
+true                        =   %x74.72.75.65 / %x31.62                                                     ; true / 1b
+false                       =   %x66.61.6C.73.65 / %x30.62                                                  ; false / 0b
+
+;; Char
+
+char                        =   grave-accent character grave-accent                                         ; `.`
+
+grave-accent                =   %x60                                                                        ; ` Grave accent
+character                   =   unescaped-character / escaped-character
+
+unescaped-character         =   %x20-5F / %x61-7E
+escaped-character           =   escape escape-sequence-character
+
+escape-sequence-character   =   %x5C                                                                        ; \ Backslah        U+005C
+escape-sequence-character   =/  %x60                                                                        ; ` Grave accent    U+0060
+escape-sequence-character   =/  %x62                                                                        ; b Backspace       U+0008
+escape-sequence-character   =/  %x66                                                                        ; f Form feed       U+000C
+escape-sequence-character   =/  %x6E                                                                        ; n Line feed       U+000A
+escape-sequence-character   =/  %x72                                                                        ; r Carriage return U+000D
+escape-sequence-character   =/  %x74                                                                        ; t Horizontal tab  U+0009
+
+;; Byte
+
+byte                        =   decimal-int %x42                                                            ; 77B
+
+;; Short
+
+short                       =   decimal-int %x73                                                            ; 77s
+
+;; Int
+
+int                         =   binary-int / octal-int / decimal-int / hexadecimal-int                      ; 0b1001101 / 0o115 / 77 / 0x4D
+
+binary-int                  =   [ minus / plus ] binary-prefix digit0-1 *( digit0-1 / underscore digit0-1 ) ; 0b1001101 / -0b1_001_101
+octal-int                   =   [ minus / plus ] octal-prefix digit0-7 *( digit0-7 / underscore digit0-7 )  ; 0o115 / -0o1_15
+decimal-int                 =   [ minus / plus ] unsigned-decimal-int                                       ; 77 / -7_7
+hexadecimal-int             =   [ minus / plus ] hexadecimal-prefix HEXDIG *( HEXDIG / underscore HEXDIG )  ; 0x4D / -0x4_D
+
+unsigned-decimal-int        =   DIGIT / digit1-9 *( DIGIT / underscore DIGIT )
+
+;; Long
+
+long                        =   decimal-int %x4C                                                            ; 77L
+
+;; Float
+
+float                       =   simple-float float-suffix / special-float                                   ; 77f / 77%
+
+simple-float                =   float-int-part                                                              ; 77
+simple-float                =/  float-int-part ( exponent / fraction [ exponent ] )                         ; 77.0
+
+float-suffix                =   %x66                                                                        ; f
+special-float               =   [ minus / plus ] ( nan / inf / percentage )
+
+float-int-part              =   decimal-int
+exponent                    =   "e" float-exponent-part
+fraction                    =   decimal-point zero-prefixable-int
+
+nan                         =   %x6E.61.6E                                                                  ; nan Not a number
+inf                         =   %x69.6E.66                                                                  ; inf Infinity
+percentage                  =   simple-float %x25                                                           ; 77%
+
+float-exponent-part         =   [ minus / plus ] zero-prefixable-int
+decimal-point               =   %x2E                                                                        ; . Dot
+zero-prefixable-int         =   DIGIT *( DIGIT / underscore DIGIT )
+
+;; Double
+
+double                      =   simple-float %x64                                                           ; 77d
+
+;; Array
+
+array                       =   basic-array / bool-array / char-array / byte-array / short-array / int-array / long-array / float-array / double-array
+
+;; Basic Array
+
+basic-array                 =   array-open [ array-values ] whitespace-comment-newline array-close          ; [...]
+
+array-open                  =   %x5B                                                                        ; [ Left square bracket
+array-close                 =   %x5D                                                                        ; ] Right square bracket
+
+array-values                =   whitespace-comment-newline tag whitespace-comment-newline array-separator array-values
+array-values                =/  whitespace-comment-newline tag whitespace-comment-newline [ array-separator ]
+
+whitespace-comment-newline  =   *( whitespace-char / [ comment ] newline )
+array-separator             =   %x2C                                                                        ; , Comma
+
+;; Bool Array
+
+bool-array                  =   bool-array-open [ bool-array-values ] bool-array-close                      ; [Z;...]
+
+bool-array-open             =   %x5B whitespace %x5A.3B whitespace                                          ; [Z; Left square bracket and Z and semicolon
+bool-array-close            =   whitespace %x5D                                                             ; ] Right square bracket
+
+bool-array-values           =   bool-array-single bool-array-separator bool-array-values
+bool-array-values           =   bool-array-single [ bool-array-separator ]
+
+bool-array-single           =   true-single / false-single
+bool-array-separator        =   whitespace %x2C whitespace                                                  ; , Comma
+
+true-single                 =   %x74.72.75.65 / %x31                                                        ; true / 1
+false-single                =   %x66.61.6C.73.65 / %x30                                                     ; false / 0
+
+;; Char Array
+
+char-array                  =   char-array-open [ char-array-values ] char-array-close                      ; [C;...]
+
+char-array-open             =   %x5B whitespace %x43.3B whitespace                                          ; [C; Left square bracket and C and semicolon
+char-array-close            =   whitespace %x5D                                                             ; ] Right square bracket
+
+char-array-values           =   basic-string / literal-string
+
+;; Byte Array
+
+byte-array                  =   byte-array-open [ byte-array-values ] byte-array-close                      ; [B;...]
+
+byte-array-open             =   %x5B whitespace %x42.3B whitespace                                          ; [B; Left square bracket and B and semicolon
+byte-array-close            =   whitespace %x5D                                                             ; ] Right square bracket
+
+byte-array-values           =   decimal-int byte-array-separator byte-array-values
+byte-array-values           =/  decimal-int [ byte-array-separator ]
+
+byte-array-separator        =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Short Array
+
+short-array                 =   short-array-open [ short-array-values ] short-array-close                   ; [S;...]
+
+short-array-open            =   %x5B whitespace %x53.3B whitespace                                          ; [S; Left square bracket and S and semicolon
+short-array-close           =   whitespace %x5D                                                             ; ] Right square bracket
+
+short-array-values          =   decimal-int short-array-separator short-array-values
+short-array-values          =/  decimal-int [ short-array-separator ]
+
+short-array-separator       =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Int Array
+
+int-array                   =   int-array-open [ int-array-values ] int-array-close                         ; [I;...]
+
+int-array-open              =   %x5B whitespace %x49.3B whitespace                                          ; [I; Left square bracket and I and semicolon
+int-array-close             =   whitespace %x5D                                                             ; ] Right square bracket
+
+int-array-values            =   decimal-int int-array-separator int-array-values
+int-array-values            =/  decimal-int [ int-array-separator ]
+
+int-array-separator         =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Float Array
+
+float-array                 =   float-array-open [ float-array-values ] float-array-close                   ; [F;...]
+
+float-array-open            =   %x5B whitespace %x46.3B whitespace                                          ; [F; Left square bracket and F and semicolon
+float-array-close           =   whitespace %x5D                                                             ; ] Right square bracket
+
+float-array-values          =   ( simple-float / special-float ) float-array-separator float-array-values
+float-array-values          =/  ( simple-float / special-float ) [ float-array-separator ]
+
+float-array-separator       =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Double Array
+
+double-array                =   double-array-open [ double-array-values ] double-array-close                ; [D;...]
+
+double-array-open           =   %x5B whitespace %x44.3B whitespace                                          ; [D; Left square bracket and D and semicolon
+double-array-open           =   whitespace %x5D                                                             ; ] Right square bracket
+
+double-array-values         =   simple-float double-array-separator double-array-values
+double-array-values         =/  simple-float [ double-array-separator ]
+
+double-array-separator      =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Inline Table
+
+inline-table                =   inline-table-open [ inline-table-tags ] inline-table-close                  ; {...}
+
+inline-table-open           =   %x7B whitespace                                                             ; { Left curly brace
+inline-table-close          =   whitespace %x7D                                                             ; } Right curly brace
+
+inline-table-tags           =   named-tag [ inline-table-separator inline-table-tags ]
+
+inline-table-separator      =   whitespace %x2C whitespace                                                  ; , Comma
+
+;; Shared date and time terms, defined here for this spec
+
+year                        =   4DIGIT                                                                      ; yyyy
+month                       =   2DIGIT                                                                      ; MM, 01-12
+day                         =   2DIGIT                                                                      ; dd, 01-28, 01-29, 01-30, 01-31 based on month/year
+
+time-delimiter              =   "T" / %x20                                                                  ; T / t / Space
+
+hour                        =   2DIGIT                                                                      ; HH, 00-23
+minute                      =   2DIGIT                                                                      ; mm, 00-59
+second                      =   2DIGIT                                                                      ; ss, 00-58, 00-59, 00-60 based on leap second rules
+millisecond                 =   "." 1*DIGIT                                                                 ; .SSS
+
+time-offset                 =   "Z" / number-offset                                                         ; Z, UTC+8
+number-offset               =   ( "+" / "-" ) hour ":" minute                                               ; Z, +08:00
+
+date                        =   year "-" month "-" day                                                      ; yyyy-MM-dd
+time                        =   partial-time time-offset                                                    ; HH:mm:ss.SSSZ
+
+partial-time                =   hour ":" minute ":" second [ millisecond ]                                  ; HH:mm:ss.SSS
+
+;; Date and Time (as defined in RFC 3339 -- https://www.ietf.org/rfc/rfc3339.txt)
+
+date-time                   =   offset-date-time / local-date-time / local-date / local-time
+
+offset-date-time            =   date time-delimiter time                                                    ; yyyy-MM-dd'T'HH:mm:ss.SSSZ
+local-date-time             =   date time-delimiter partial-time                                            ; yyyy-MM-dd'T'HH:mm:ss.SSS
+local-date                  =   date                                                                        ; yyyy-MM-dd
+local-time                  =   time                                                                        ; HH:mm:ss.SSS
+
+;; Table
+
+table                       =   standard-table / array-table
+
+;; Standard Table
+
+standard-table              =   standard-table-open tag-name standard-table-close                           ; [...]
+
+standard-table-open         =   %x5B whitespace                                                             ; [ Left square bracket
+standard-table-close        =   whitespace %x5D                                                             ; ] Right square bracket
+
+;; Array Table
+
+array-table                 =   array-table-open tag-name array-table-close                                 ; [[...]]
+
+array-table-open            =   %x5B.5B whitespace                                                          ; [[ Double left square brackets
+array-table-close           =   whitespace %x5D.5D                                                          ; ]] Double right square brackets
+
+;; Built-in ABNF terms, reproduced here for clarity
+
+ALPHA                       =   %x41-5A / %x61-7A                                                           ; A-Z / a-z
+DIGIT                       =   %x30-39                                                                     ; 0-9
+HEXDIG                      =   DIGIT / "A" / "B" / "C" / "D" / "E" / "F"                                   ; 0-9 A-F a-f (hexadecimal)
